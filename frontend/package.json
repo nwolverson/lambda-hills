@@ -1,0 +1,16 @@
+{
+  "name": "frontend",
+  "private": true,
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "upload": "aws s3 cp --recursive dist s3://hills-stack-websitebucket-osfvhyqghw9s/",
+    "build": "pulp build --to dist/bundle.js"
+  },
+  "author": "Nicholas Wolverson <nicholas.wolverson@gmail.com> (http://nwolverson.uk)",
+  "license": "ISC"
+}

@@ -1,0 +1,23 @@
+{
+  "name": "lambda",
+  "private": true,
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "clean": "rm -rf dist/*",
+    "build": "run-s clean build:*",
+    "build:ps": "pulp build --to dist/index.js --skip-entry-point",
+    "build:add-export": "cat .bundle-suffix.js >> dist/index.js",
+    "build:zip": "cd dist && zip index.zip index.js",
+    "upload": "aws s3 cp dist/index.zip s3://hills-stack-lambdabucket-1s8lp7cttqwp5"
+  },
+  "author": "Nicholas Wolverson <nicholas.wolverson@gmail.com> (http://nwolverson.uk)",
+  "license": "ISC",
+  "devDependencies": {
+    "npm-run-all": "^4.0.2"
+  }
+}

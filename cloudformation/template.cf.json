@@ -1,0 +1,190 @@
+{
+    "Resources": {
+        "WebsiteBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "WebsiteConfiguration": {
+                    "IndexDocument": "index.html"
+                }
+            }
+        },
+        "LambdaBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                }
+            }
+        },
+        "WebsiteBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "WebsiteBucket"
+                },
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Sid": "PublicReadGetObject",
+                            "Effect": "Allow",
+                            "Resource": { "Fn::Join" : ["", ["arn:aws:s3:::", { "Ref" : "WebsiteBucket" } , "/*" ]]},
+                            "Principal": "*",
+                            "Action": [
+                                "s3:GetObject"
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "LambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Handler": "index.handler",
+                "Runtime": "nodejs6.10",
+                "Role": { "Fn::GetAtt" : ["LambdaExecutionRole", "Arn"] },
+                "Code": {
+                    "S3Bucket": { "Ref": "LambdaBucket" },
+                    "S3Key": "index.zip",
+                    "S3ObjectVersion": "2j82Q4aEllE7dc4T1v5rMtBIglQUJdJ5z"
+                }
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [{ "Effect": "Allow", "Principal": {"Service": ["lambda.amazonaws.com"]}, "Action": ["sts:AssumeRole"] }]
+                },
+                "Path": "/",
+                "Policies": [{
+                    "PolicyName": "root",
+                    "PolicyDocument": {
+                        "Version": "2012-10-17",
+                        "Statement": [{ "Effect": "Allow", "Action": ["logs:*"], "Resource": "arn:aws:logs:*:*:*" }]
+                    }
+                }]
+            }
+        },
+        "LambdaPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:invokeFunction",
+                "FunctionName": {"Fn::GetAtt": ["LambdaFunction", "Arn"]},
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {"Fn::Join": ["", 
+                    ["arn:aws:execute-api:", {"Ref": "AWS::Region"}, ":", {"Ref": "AWS::AccountId"}, ":", {"Ref": "AGRestApi"}, "/*"]
+                ]}
+            }
+        },
+        "AGRestApi": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+               "Name": "Hello lambda API",
+               "Description": "Hello world lambda API"
+            }
+        },
+        "AGLambdaMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "HttpMethod": "GET",
+                "RestApiId": {"Ref": "AGRestApi"},
+                "AuthorizationType": "NONE",
+                "ResourceId": {"Ref": "AGResource"},
+                "MethodResponses": [{
+                    "StatusCode": 200
+                }],
+                "Integration": {
+                    "Type": "AWS",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {"Fn::Join" : ["", 
+                        ["arn:aws:apigateway:", {"Ref": "AWS::Region"}, ":lambda:path/2015-03-31/functions/", {"Fn::GetAtt": ["LambdaFunction", "Arn"]}, "/invocations"]
+                    ]},
+                    "IntegrationResponses": [{
+                        "StatusCode": 200
+                    }],
+                    "RequestTemplates": {
+                        "application/json": {"Fn::Join" : ["", [
+                            "{",
+                                "\"name\": \"$input.params('name')\"",
+                            "}"
+                            ]]
+                        }
+                    }
+                }
+            }
+        },
+        "AGStage": {
+            "Type": "AWS::ApiGateway::Stage",
+            "DependsOn" : ["ApiGatewayAccount"],
+            "Properties": {
+                "DeploymentId": {"Ref": "AGDeployment"},
+                "MethodSettings": [{
+                    "DataTraceEnabled": true,
+                    "HttpMethod": "*",
+                    "LoggingLevel": "INFO",
+                    "ResourcePath": "/*"
+                }],
+                "StageName": "dev",
+                "RestApiId": {"Ref": "AGRestApi"}
+            }
+        },
+        "AGDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "Properties": {
+                "RestApiId": {"Ref": "AGRestApi"},
+                "StageName": "DummyStage"
+            },
+            "DependsOn":[
+                "AGLambdaMethod"
+            ]
+        },
+        "AGResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {"Ref": "AGRestApi"},
+                "ParentId": { "Fn::GetAtt": ["AGRestApi", "RootResourceId"] },
+                "PathPart": "hello"
+            }
+        },
+        "ApiGatewayAccount": {
+  "Type" : "AWS::ApiGateway::Account",
+  "Properties" : {
+    "CloudWatchRoleArn" : {"Fn::GetAtt" : ["ApiGatewayCloudWatchLogsRole", "Arn"] }
+  }
+},
+"ApiGatewayCloudWatchLogsRole": {
+  "Type": "AWS::IAM::Role",
+  "Properties": {
+    "AssumeRolePolicyDocument": {
+      "Version": "2012-10-17",
+      "Statement": [{
+        "Effect": "Allow",
+        "Principal": { "Service": ["apigateway.amazonaws.com"] },
+        "Action": ["sts:AssumeRole"]
+      }]
+    },
+    "Policies": [{
+      "PolicyName": "ApiGatewayLogsPolicy",
+      "PolicyDocument": {
+        "Version": "2012-10-17",
+        "Statement": [{
+          "Effect": "Allow",
+          "Action": [
+            "logs:CreateLogGroup",
+            "logs:CreateLogStream",
+            "logs:DescribeLogGroups",
+            "logs:DescribeLogStreams",
+            "logs:PutLogEvents",
+            "logs:GetLogEvents",
+            "logs:FilterLogEvents"
+          ],
+          "Resource": "*"
+        }]
+      }
+    }]
+  }
+}
+    }
+}
